@@ -84,6 +84,15 @@ body {
 .chip:hover { border-color: var(--line-strong); color: var(--ink); }
 .chip.active { background: var(--ink); border-color: var(--ink); color: #fff; }
 
+/* 서비스 한 줄 소개. 첫 화면에서 무엇인지 바로 읽히게 한다. */
+.value-line {
+    margin: 4px 0 18px; padding: 18px 22px;
+    background: var(--accent-soft); border-radius: var(--r-md);
+    border-left: 3px solid var(--accent);
+}
+.value-line p { font-size: 14.5px; color: var(--ink-2); line-height: 1.7; }
+.value-line p strong { color: var(--ink); font-weight: 600; }
+
 .source-note {
     color: var(--ink-2); font-size: 13.5px; margin-bottom: 22px;
     padding-left: 2px;
