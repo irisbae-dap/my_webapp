@@ -1,12 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "steppingstones",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["app.py"],
-      "port": 5000,
-      "autoPort": true
-    }
+    { "name": "steppingstones", "runtimeExecutable": "python", "runtimeArgs": ["app.py"], "port": 5000, "autoPort": true }
   ]
 }

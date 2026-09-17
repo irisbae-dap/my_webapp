@@ -2,7 +2,27 @@ import os
 
 from flask import Flask, render_template, request, jsonify
 
-import database
+
+def load_local_env():
+    """로컬 실행 시 .env 를 읽는다. 배포 환경은 플랫폼 환경변수를 쓴다.
+
+    database 모듈이 임포트 시점에 DATABASE_URL 을 읽으므로 그 전에 호출해야 한다.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(path):
+        return
+    for line in open(path, encoding='utf-8'):
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+load_local_env()
+
+import database  # noqa: E402  (.env 로드 후에 임포트해야 한다)
+
 
 app = Flask(__name__)
 

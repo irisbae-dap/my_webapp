@@ -15,12 +15,17 @@ DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 USE_POSTGRES = bool(DATABASE_URL)
 
 if USE_POSTGRES:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-elif os.environ.get('VERCEL'):
-    SQLITE_FILE = os.path.join('/tmp', 'steppingstones.db')
-else:
-    SQLITE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'steppingstones.db')
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    except ImportError:
+        USE_POSTGRES = False
+
+if not USE_POSTGRES:
+    if os.environ.get('VERCEL'):
+        SQLITE_FILE = os.path.join('/tmp', 'steppingstones.db')
+    else:
+        SQLITE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'steppingstones.db')
 
 
 # Stepping Stones 5-category 분석 모델 (05-project-stepping-stones.md, v2 기준).
