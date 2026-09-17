@@ -21,6 +21,22 @@ python app.py
 
 http://127.0.0.1:5000 에서 접속합니다. 최초 실행 시 `todo.db`가 생성되고 샘플 데이터가 시딩됩니다.
 
+## 데이터베이스
+
+`DATABASE_URL` 환경변수 유무로 저장소가 결정됩니다.
+
+| 환경변수 | 사용 DB | 용도 |
+|---|---|---|
+| 없음 | 로컬 SQLite (`todo.db`) | 로컬 개발 |
+| 설정됨 | Supabase Postgres | 배포 (데이터 영구 보존) |
+
+Supabase 연결 문자열은 대시보드의 **Project Settings → Database → Connection string**에서
+Connection Pooling(Transaction 모드, 포트 `6543`)용 값을 복사해 쓰세요. 서버리스 환경에서는
+요청마다 커넥션이 생기므로 풀러를 쓰지 않으면 연결 수 제한에 걸립니다.
+
+형식은 `.env.example`을 참고하세요. Vercel에 배포할 때는
+**Settings → Environment Variables**에 `DATABASE_URL`을 등록해야 합니다.
+
 ## API
 
 | 메서드 | 경로 | 설명 |
