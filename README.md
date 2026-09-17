@@ -1,16 +1,49 @@
-# Stepping Stones
+# Stepping Stones — English Dashboard
 
-몰리 · 빌과의 English coaching 기록을 모아 보는 학습 분석 대시보드.
+내 영어 코칭 기록을 한곳에서 보는 학습 분석 대시보드.
 Flask + Supabase Postgres, Vercel 배포.
 
-## 기능
+**Live:** https://260917v-azure.vercel.app
 
-- **Stepping Stones 진행도** — 누적 마스터 항목 수로 5단계 사다리를 오른다
-- **핵심 지표** — 기간 내 학습 항목 / 코칭 세션 / 학습 시간 / 마스터율
-- **차트** — 주차별 학습량, 유형별 분포, 숙련도 구성, 코치별 비중
-- **학습 리스트** — 검색 · 유형 · 코치 · 상태 필터, 클릭 한 번으로 상태 전환
-  (새 항목 → 학습 중 → 마스터)
-- **기간 전환** — 7일 / 30일 / 90일
+## 무엇을 보여주나
+
+프로젝트 스펙(`05-project-stepping-stones.md`, `ss_engine_dashboard.md`)의
+**5-category 분석 모델**을 그대로 화면 모듈로 옮겼습니다.
+
+| # | 카테고리 | 이 대시보드가 재는 것 | 상태 |
+|---|---|---|---|
+| 1 | Flow & Thought Process | 문장 평균 길이와 변동성 | 측정됨 |
+| 2 | Discourse & Voice | hedging 빈도 (100단어당) | 측정됨 |
+| 3 | Accuracy | 문법·어휘 오류 | **미측정** |
+| 4 | Nuance & Lexical | 어휘 다양성 (고유어 비율) | 측정됨 |
+| 5 | Habit Analysis | 필러 단어 빈도 | 측정됨 |
+
+Accuracy는 원문 텍스트만으로 계산할 수 없어 **값을 비워두고 화면에 그 사실을 밝힙니다.**
+추정치를 채워 넣지 않았습니다.
+
+이 외에 페블 타워(세션 1건 = 돌 1개), 필러·헤지 빈도 차트, 학습 리스트,
+최근 세션 표가 있습니다.
+
+## 데이터 출처
+
+Google Drive `7_english_corpus.md` — 본인의 영어 작성 + 코치 피드백 대화 93건
+(2023-03-05 ~ 2026-02-24). 이 중 영어 발화가 20단어 이상인 **87건**을 세션으로 적재했습니다.
+
+**모든 지표는 본인 발화에서만 계산합니다.** 코치 답변 텍스트는 제외합니다.
+학습 리스트도 빈도 근거가 있는 항목만 만듭니다 — 지어낸 항목은 없습니다.
+
+| 학습 항목 종류 | 근거 |
+|---|---|
+| Habit | 실제 필러 사용 횟수 (예: "like" 85회 / 33개 세션) |
+| Voice | 실제 hedging 사용 횟수 |
+| Accuracy | 코치 피드백에 명시적으로 나온 교정 쌍 |
+| Nuance | 코치가 알려준 어휘 |
+
+### 기간 필터 주의
+
+코퍼스는 2026-02-24에서 끝납니다. 오늘 날짜를 기준으로 자르면 화면이 비므로,
+기간 필터는 **데이터의 마지막 날짜를 기준**으로 계산합니다
+(`Last 30 days` = 2026-01-26 ~ 2026-02-24).
 
 ## 실행
 
@@ -19,88 +52,67 @@ pip install -r requirements.txt
 python app.py
 ```
 
-http://127.0.0.1:5000 에서 접속합니다. `PORT` 환경변수로 포트를 바꿀 수 있습니다.
+`.env`에 `DATABASE_URL`을 두면 Supabase를, 없으면 로컬 SQLite를 씁니다.
+`PORT`로 포트를 바꿀 수 있습니다.
 
-## 데이터베이스
-
-`DATABASE_URL` 유무로 저장소가 결정됩니다.
-
-| 환경변수 | 사용 DB | 용도 |
-|---|---|---|
-| 없음 | 로컬 SQLite (`steppingstones.db`) | 로컬 개발 |
-| 설정됨 | Supabase Postgres | 배포 (데이터 영구 보존) |
-
-Supabase 연결 문자열은 **Project Settings → Database → Connection string**의
-Transaction pooler(포트 `6543`) 값을 씁니다. 서버리스는 요청마다 커넥션이 생기므로
-풀러를 쓰지 않으면 연결 수 제한에 걸립니다. 형식은 `.env.example` 참고.
-
-### 테이블
-
-| 테이블 | 내용 |
+| 환경변수 | 사용 DB |
 |---|---|
-| `sessions` | 코칭 세션 (날짜, 코치, 주제, 요약, 시간) |
-| `items` | 학습 항목 (표현, 뜻, 예문, 유형, 코치, 상태, 태그, 학습일) |
+| 없음 | 로컬 SQLite (`steppingstones.db`) |
+| `DATABASE_URL` | Supabase Postgres |
 
-`is_sample = 1`인 행은 대시보드 동작 확인용 표본입니다. 실제 자료를 적재하면
-자동으로 제거되고, 화면 상단의 예시 데이터 경고 배너도 사라집니다.
+Supabase 연결 문자열은 **Settings → Database → Connection string**의
+Transaction pooler(포트 `6543`)를 씁니다. 서버리스는 요청마다 커넥션이 생겨
+풀러 없이는 연결 수 제한에 걸립니다.
 
-## 실제 학습 자료 적재
+## 데이터 다시 만들기
 
-`POST /api/import`에 아래 형태로 보내면 표본을 걷어내고 실제 자료로 교체합니다.
-
-```json
-{
-  "replace_sample": true,
-  "sessions": [
-    { "key": "s1", "session_date": "2026-09-12", "coach": "Bill",
-      "topic": "Business email tone", "summary": "...", "duration_min": 45 }
-  ],
-  "items": [
-    { "term": "circle back", "meaning": "다시 논의하다",
-      "example": "I will circle back on this tomorrow.",
-      "item_type": "expression", "coach": "Bill", "status": "learning",
-      "tags": "business", "source_date": "2026-09-12", "session_key": "s1" }
-  ]
-}
+```bash
+python tools_extract_corpus.py     # 코퍼스 -> extracted.json (지표 계산)
+python tools_build_dataset.py      # extracted.json -> dataset.json (적재용)
+curl -X POST http://127.0.0.1:5000/api/load \
+     -H "Content-Type: application/json" --data-binary @dataset.json
 ```
 
-`item_type`은 `vocab` / `expression` / `grammar` / `pronunciation`,
-`status`는 `new` / `learning` / `mastered` 중 하나입니다.
+두 스크립트 상단의 경로 상수를 실제 코퍼스 위치로 맞춘 뒤 실행하세요.
+`/api/load`는 기본적으로 기존 데이터를 비우고 새로 적재합니다.
 
 ## API
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/analytics?days=30` | 지표 · 차트 · 단계 진행도 |
-| GET | `/api/items` | 목록 (`search`, `type`, `status`, `coach`, `days`) |
-| POST | `/api/items` | 항목 추가 (`term` 필수) |
-| PATCH | `/api/items/<id>/status` | 상태 변경 |
-| DELETE | `/api/items/<id>` | 항목 삭제 |
-| GET | `/api/sessions?days=30` | 세션 목록 |
-| POST | `/api/import` | 실제 자료 일괄 적재 |
-| DELETE | `/api/sample` | 표본 데이터만 제거 |
+| GET | `/api/overview?days=` | 5개 카테고리, 빈도 차트, 요약 수치 |
+| GET | `/api/sessions?days=` | 세션 원자료 |
+| GET | `/api/study` | 학습 리스트 (`status`, `category`, `search`) |
+| PATCH | `/api/study/<id>/status` | To do → Working on it → Done |
+| POST | `/api/load` | 데이터셋 일괄 적재 |
 
-## 단계 기준 바꾸기
+## 테이블
 
-`database.py`의 `STONES` 목록이 단일 기준점입니다. 이름과 `target`(누적 마스터 수)을
-고치면 대시보드 전체에 반영됩니다.
+| 테이블 | 내용 |
+|---|---|
+| `sessions` | 세션별 지표 (단어 수, 문장 길이, 어휘 다양성, 필러·헤지 빈도) |
+| `patterns` | 세션별 필러/헤지 표현과 횟수 |
+| `study_items` | 학습 항목과 진행 상태 |
 
-```python
-STONES = [
-    {'no': 1, 'name': 'Foundation', 'label': '기초 다지기', 'target': 20},
-    ...
-]
-```
+## 기준 바꾸기
+
+`database.py`의 `CATEGORIES`가 단일 기준점입니다. 어떤 지표를 어느 카테고리에
+붙일지, 높은 값이 좋은지(`direction`), 측정 가능한지(`measured`)를 여기서 정합니다.
+
+## 디자인
+
+스펙의 **soft grey + warm undertone**, 페블/돌탑 모티프를 따랐습니다.
+차트 색은 색각 이상 대비 검증을 통과한 팔레트를 쓰고, 대비가 낮은 색은
+막대마다 숫자를 직접 붙여 보완했습니다. UI 문구는 쉬운 영어로 씁니다.
 
 ## 구조
 
 ```
-app.py                 # Flask 라우트 / REST API
-database.py            # 데이터 계층 (SQLite ↔ Postgres 이중 지원) + 단계 정의
-templates/index.html   # 단일 페이지 대시보드
-static/css/style.css   # 다크 글래스모피즘 스타일
-static/js/app.js       # 대시보드 로직 + 인라인 SVG 차트
+app.py                    # Flask 라우트 / REST API
+database.py               # 데이터 계층 (SQLite ↔ Postgres) + 5-category 정의
+templates/index.html      # 단일 페이지 대시보드
+static/css/style.css      # 웜그레이 페블 테마
+static/js/app.js          # 대시보드 로직 + 인라인 SVG 차트
+tools_extract_corpus.py   # 코퍼스 -> 지표 추출
+tools_build_dataset.py    # 지표 -> 적재용 데이터셋
 ```
-
-차트 색은 색각 이상 대비를 검증한 다크 모드 카테고리 팔레트를 쓰고, 상태색
-(새 항목 / 학습 중 / 마스터)은 계열색과 섞이지 않도록 따로 예약했습니다.
