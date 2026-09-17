@@ -14,7 +14,8 @@
 
     --ink:           #2b2722;
     --ink-2:         #6b6255;
-    --ink-3:         #958b7c;
+    --ink-3:         #6f6555;   /* 본문 보조. 표면 대비 5.36:1 */
+    --ink-faint:     #857a69;   /* 장식 전용. 본문에 쓰지 않는다 */
 
     --accent:        #8a7357;   /* 돌/모래 톤 */
     --accent-soft:   #ece4d8;
@@ -189,7 +190,7 @@ body {
     padding: 16px 18px; margin-bottom: 16px;
 }
 .search { position: relative; flex: 1; min-width: 210px; }
-.search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-3); font-size: 13px; }
+.search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-faint); font-size: 13px; }
 .search input {
     width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--line);
     border-radius: var(--r-sm); background: var(--bg); font: inherit; font-size: 13.5px;
@@ -199,27 +200,36 @@ body {
 
 /* ------------------------------------------------------------ study list */
 .study-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 34px; }
-.study { display: flex; gap: 15px; padding: 16px 18px; align-items: flex-start; }
-.study.st-done { opacity: .62; }
+.study { display: flex; gap: 15px; padding: 18px 20px; align-items: flex-start; }
+/* 완료 항목도 읽을 수 있어야 한다. 투명도 대신 색으로만 눌러 표시한다. */
+.study.st-done { background: var(--surface-2); }
 
 .mark-btn {
-    width: 30px; height: 30px; flex-shrink: 0; margin-top: 2px;
-    display: grid; place-items: center; border: 1px solid var(--line-strong);
+    width: 32px; height: 32px; flex-shrink: 0; margin-top: 1px;
+    display: grid; place-items: center; border: 1.5px solid var(--ink-3);
     border-radius: 50%; background: var(--surface); color: var(--ink-3);
-    cursor: pointer; font-size: 12px; transition: all .18s ease;
+    cursor: pointer; font-size: 13px; transition: all .18s ease;
 }
+.mark-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mark-btn:hover { border-color: var(--accent); color: var(--accent); }
 .mark-btn.working { background: #fbeedb; border-color: #e6c489; color: #9a5c09; }
 .mark-btn.done { background: var(--good); border-color: var(--good); color: #fff; }
 
 .study-body { min-width: 0; flex: 1; }
 .study-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.study-head h4 { font-size: 14.5px; font-weight: 600; }
+.study-head h4 { font-size: 15.5px; font-weight: 600; line-height: 1.4; }
 .study.st-done .study-head h4 { text-decoration: line-through; color: var(--ink-2); }
-.study-detail { font-size: 13px; color: var(--ink-2); margin-top: 5px; }
-.study-evidence { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+.study-detail { font-size: 13.5px; color: var(--ink-2); margin-top: 6px; }
+.study-evidence {
+    font-size: 12.5px; color: var(--ink-3); margin-top: 8px;
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.study-evidence i { color: var(--ink-faint); }
 
-.pill { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); }
+.pill {
+    font-size: 11.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px;
+    background: var(--surface-2); color: var(--ink-3);
+}
 .pill.cat-habit     { background: #fdeee6; color: #a8461d; }
 .pill.cat-discourse { background: #e7f0fc; color: #1d5fae; }
 .pill.cat-accuracy  { background: #e3f4ec; color: #10795a; }
@@ -227,7 +237,7 @@ body {
 .pill.status.done   { background: #e3f4ec; color: #10795a; }
 
 .empty { padding: 44px 24px; text-align: center; margin-bottom: 34px; }
-.empty i { font-size: 30px; color: var(--ink-3); }
+.empty i { font-size: 30px; color: var(--ink-faint); }
 .empty h3 { font-size: 16px; margin: 10px 0 4px; }
 .empty p { color: var(--ink-2); font-size: 13.5px; }
 
