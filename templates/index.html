@@ -3,14 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TaskFlow | 스마트 플라스크 할일 관리</title>
-    <!-- Google Fonts -->
+    <title>Stepping Stones | English Coaching Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- FontAwesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -21,202 +18,215 @@
     </div>
 
     <div class="app-container">
-        <!-- Header -->
         <header class="app-header">
             <div class="brand">
-                <div class="logo-icon">
-                    <i class="fa-solid fa-list-check"></i>
-                </div>
+                <div class="logo-icon"><i class="fa-solid fa-shoe-prints"></i></div>
                 <div class="brand-text">
-                    <h1>TaskFlow <span>Flask</span></h1>
-                    <p>스마트하고 직관적인 할일 관리 스마트 앱</p>
+                    <h1>Stepping <span>Stones</span></h1>
+                    <p>몰리 · 빌 English coaching 학습 분석 대시보드</p>
                 </div>
             </div>
             <div class="header-actions">
-                <div class="date-badge" id="current-date-badge">
-                    <i class="fa-regular fa-calendar"></i> <span id="today-date">2026.09.17</span>
+                <div class="range-tabs" role="group" aria-label="기간 선택">
+                    <button class="tab-btn" data-days="7">7일</button>
+                    <button class="tab-btn active" data-days="30">30일</button>
+                    <button class="tab-btn" data-days="90">90일</button>
                 </div>
-                <button class="btn btn-primary btn-glow" onclick="openAddModal()">
-                    <i class="fa-solid fa-plus"></i> 새 할일 추가
+                <button class="btn btn-primary btn-glow" id="add-btn">
+                    <i class="fa-solid fa-plus"></i> 학습 항목 추가
                 </button>
             </div>
         </header>
 
-        <!-- Stats Dashboard -->
+        <div class="notice-banner" id="sample-banner" hidden>
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+                <strong>지금 보이는 내용은 실제 코칭 기록이 아닌 예시 데이터입니다.</strong>
+                <span>대시보드 동작 확인용으로 채워둔 표본이며, 실제 몰리·빌 대화에서 추출한 자료가 아닙니다. 실제 자료를 적재하면 자동으로 사라집니다.</span>
+            </div>
+        </div>
+
+        <section class="stones-panel glass-card">
+            <div class="stones-head">
+                <div>
+                    <span class="panel-label">현재 단계</span>
+                    <h2 id="stone-name">—</h2>
+                    <p id="stone-caption" class="panel-caption">—</p>
+                </div>
+                <div class="stone-metric">
+                    <span class="hero-number" id="stone-mastered">0</span>
+                    <span class="hero-unit">누적 마스터 항목</span>
+                </div>
+            </div>
+            <ol class="stone-track" id="stone-track"></ol>
+        </section>
+
         <section class="stats-grid">
             <div class="stat-card glass-card">
-                <div class="stat-icon icon-total">
-                    <i class="fa-solid fa-layer-group"></i>
-                </div>
+                <div class="stat-icon icon-total"><i class="fa-solid fa-layer-group"></i></div>
                 <div class="stat-info">
-                    <span class="stat-label">전체 할일</span>
-                    <h3 id="stat-total">0</h3>
+                    <span class="stat-label">기간 내 학습 항목</span>
+                    <h3 id="stat-items">0</h3>
                 </div>
             </div>
             <div class="stat-card glass-card">
-                <div class="stat-icon icon-completed">
-                    <i class="fa-solid fa-circle-check"></i>
-                </div>
+                <div class="stat-icon icon-sessions"><i class="fa-solid fa-comments"></i></div>
                 <div class="stat-info">
-                    <span class="stat-label">완료한 작업</span>
-                    <h3 id="stat-completed">0</h3>
+                    <span class="stat-label">코칭 세션</span>
+                    <h3 id="stat-sessions">0</h3>
                 </div>
             </div>
             <div class="stat-card glass-card">
-                <div class="stat-icon icon-urgent">
-                    <i class="fa-solid fa-fire"></i>
-                </div>
+                <div class="stat-icon icon-time"><i class="fa-regular fa-clock"></i></div>
                 <div class="stat-info">
-                    <span class="stat-label">긴급 / 높은 우선순위</span>
-                    <h3 id="stat-urgent">0</h3>
+                    <span class="stat-label">학습 시간</span>
+                    <h3 id="stat-minutes">0분</h3>
                 </div>
             </div>
-            <div class="stat-card glass-card stat-progress">
-                <div class="stat-info width-full">
-                    <div class="progress-header">
-                        <span class="stat-label">목표 달성률</span>
-                        <span class="progress-percent" id="stat-percent">0%</span>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
-                    </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon icon-mastery"><i class="fa-solid fa-award"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">기간 내 마스터율</span>
+                    <h3 id="stat-rate">0%</h3>
                 </div>
             </div>
         </section>
 
-        <!-- Controls Toolbar -->
+        <section class="chart-grid">
+            <figure class="chart-card glass-card">
+                <figcaption>
+                    <h3>주차별 학습 항목</h3>
+                    <p>최근 4주 동안 새로 정리한 표현 수</p>
+                </figcaption>
+                <div class="chart-body" id="chart-weekly"></div>
+            </figure>
+
+            <figure class="chart-card glass-card">
+                <figcaption>
+                    <h3>유형별 분포</h3>
+                    <p>무엇을 주로 공부했는지</p>
+                </figcaption>
+                <div class="chart-body" id="chart-type"></div>
+            </figure>
+
+            <figure class="chart-card glass-card span-2">
+                <figcaption>
+                    <h3>숙련도 구성</h3>
+                    <p>기간 내 항목의 학습 상태</p>
+                </figcaption>
+                <div class="chart-body" id="chart-status"></div>
+                <div class="coach-split" id="coach-split"></div>
+            </figure>
+        </section>
+
         <section class="toolbar glass-card">
             <div class="search-box">
                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="search-input" placeholder="검색할 업무 제목 또는 내용을 입력하세요..." oninput="debounceSearch()">
-                <button class="clear-search-btn" id="clear-search-btn" onclick="clearSearch()" style="display:none;">
+                <input type="text" id="search-input" placeholder="표현, 뜻, 예문, 태그로 검색...">
+                <button class="clear-search-btn" id="clear-search-btn" hidden>
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-
             <div class="filter-controls">
-                <!-- Status Filter Tabs -->
-                <div class="status-tabs">
-                    <button class="tab-btn active" data-status="" onclick="setStatusFilter('', this)">전체</button>
-                    <button class="tab-btn" data-status="active" onclick="setStatusFilter('active', this)">진행 중</button>
-                    <button class="tab-btn" data-status="completed" onclick="setStatusFilter('completed', this)">완료됨</button>
+                <div class="status-tabs" id="status-tabs">
+                    <button class="tab-btn active" data-status="">전체</button>
+                    <button class="tab-btn" data-status="new">새 항목</button>
+                    <button class="tab-btn" data-status="learning">학습 중</button>
+                    <button class="tab-btn" data-status="mastered">마스터</button>
                 </div>
-
-                <!-- Select Filters -->
                 <div class="select-group">
                     <div class="custom-select-wrapper">
-                        <i class="fa-solid fa-folder select-icon"></i>
-                        <select id="category-filter" onchange="applyFilters()">
-                            <option value="">모든 카테고리</option>
-                            <option value="Work">💼 업무 (Work)</option>
-                            <option value="Personal">🏡 개인 (Personal)</option>
-                            <option value="Shopping">🛒 쇼핑 (Shopping)</option>
-                            <option value="Health">💪 건강 (Health)</option>
-                            <option value="Study">📚 학습 (Study)</option>
-                            <option value="Other">📌 기타 (Other)</option>
+                        <i class="fa-solid fa-shapes select-icon"></i>
+                        <select id="type-filter">
+                            <option value="">모든 유형</option>
+                            <option value="vocab">단어 · 구동사</option>
+                            <option value="expression">표현</option>
+                            <option value="grammar">문법</option>
+                            <option value="pronunciation">발음</option>
                         </select>
                     </div>
-
                     <div class="custom-select-wrapper">
-                        <i class="fa-solid fa-flag select-icon"></i>
-                        <select id="priority-filter" onchange="applyFilters()">
-                            <option value="">모든 우선순위</option>
-                            <option value="High">🔴 높은 우선순위</option>
-                            <option value="Medium">🟡 보통</option>
-                            <option value="Low">🟢 낮음</option>
+                        <i class="fa-solid fa-user select-icon"></i>
+                        <select id="coach-filter">
+                            <option value="">모든 코치</option>
+                            <option value="Molly">Molly</option>
+                            <option value="Bill">Bill</option>
                         </select>
                     </div>
                 </div>
-
-                <button class="btn btn-outline-danger" onclick="clearCompleted()" title="완료된 목록 일괄 삭제">
-                    <i class="fa-solid fa-trash-can"></i> 완료 항목 삭제
-                </button>
             </div>
         </section>
 
-        <!-- Todo Items Container -->
-        <main class="todo-section">
-            <div id="todo-list" class="todo-list">
-                <!-- Dynamic Items Inserted via JavaScript -->
-            </div>
-
-            <!-- Empty State -->
-            <div id="empty-state" class="empty-state glass-card" style="display: none;">
-                <div class="empty-icon">
-                    <i class="fa-regular fa-clipboard"></i>
-                </div>
-                <h3>등록된 할일이 없습니다</h3>
-                <p>새로운 목표와 할일을 등록하여 효율적으로 일정을 관리해 보세요!</p>
-                <button class="btn btn-primary" onclick="openAddModal()">
-                    <i class="fa-solid fa-plus"></i> 첫 할일 작성하기
-                </button>
+        <main class="study-section">
+            <div id="item-list" class="item-list"></div>
+            <div id="empty-state" class="empty-state glass-card" hidden>
+                <div class="empty-icon"><i class="fa-regular fa-folder-open"></i></div>
+                <h3>표시할 학습 자료가 없습니다</h3>
+                <p>기간을 넓히거나 필터를 해제해 보세요.</p>
             </div>
         </main>
+
+        <footer class="app-footer">
+            <span>Stepping Stones 단계 기준은 <code>database.py</code>의 <code>STONES</code>에서 조정합니다.</span>
+        </footer>
     </div>
 
-    <!-- Modal Form (Add / Edit) -->
-    <div class="modal-overlay" id="todo-modal">
+    <div class="modal-overlay" id="item-modal">
         <div class="modal-content glass-card">
             <div class="modal-header">
-                <h2 id="modal-title"><i class="fa-solid fa-pen-to-square"></i> 새 할일 등록</h2>
-                <button class="close-modal" onclick="closeModal()">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+                <h2><i class="fa-solid fa-pen-to-square"></i> 학습 항목 추가</h2>
+                <button class="close-modal" id="close-modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form id="todo-form" onsubmit="handleFormSubmit(event)">
-                <input type="hidden" id="todo-id" value="">
-                
+            <form id="item-form">
                 <div class="form-group">
-                    <label for="form-title">제목 <span class="required">*</span></label>
-                    <input type="text" id="form-title" placeholder="무엇을 해야 하나요?" required maxlength="100">
+                    <label for="f-term">표현 <span class="required">*</span></label>
+                    <input type="text" id="f-term" required maxlength="120" placeholder="예: circle back">
                 </div>
-
                 <div class="form-group">
-                    <label for="form-description">상세 설명</label>
-                    <textarea id="form-description" rows="3" placeholder="필요한 추가 정보나 메모를 입력하세요..."></textarea>
+                    <label for="f-meaning">뜻</label>
+                    <input type="text" id="f-meaning" maxlength="200" placeholder="다시 논의하다">
                 </div>
-
+                <div class="form-group">
+                    <label for="f-example">예문</label>
+                    <textarea id="f-example" rows="2" placeholder="I will circle back on this tomorrow."></textarea>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="form-category">카테고리</label>
-                        <select id="form-category">
-                            <option value="Work">💼 업무 (Work)</option>
-                            <option value="Personal">🏡 개인 (Personal)</option>
-                            <option value="Shopping">🛒 쇼핑 (Shopping)</option>
-                            <option value="Health">💪 건강 (Health)</option>
-                            <option value="Study">📚 학습 (Study)</option>
-                            <option value="Other">📌 기타 (Other)</option>
+                        <label for="f-type">유형</label>
+                        <select id="f-type">
+                            <option value="vocab">단어 · 구동사</option>
+                            <option value="expression">표현</option>
+                            <option value="grammar">문법</option>
+                            <option value="pronunciation">발음</option>
                         </select>
                     </div>
-
                     <div class="form-group">
-                        <label for="form-priority">우선순위</label>
-                        <select id="form-priority">
-                            <option value="High">🔴 높은 (High)</option>
-                            <option value="Medium" selected>🟡 보통 (Medium)</option>
-                            <option value="Low">🟢 낮음 (Low)</option>
+                        <label for="f-coach">코치</label>
+                        <select id="f-coach">
+                            <option value="Molly">Molly</option>
+                            <option value="Bill">Bill</option>
                         </select>
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label for="form-duedate">마감 기한</label>
-                    <input type="date" id="form-duedate">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="f-tags">태그</label>
+                        <input type="text" id="f-tags" placeholder="business, phrasal">
+                    </div>
+                    <div class="form-group">
+                        <label for="f-date">학습일</label>
+                        <input type="date" id="f-date">
+                    </div>
                 </div>
-
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
-                    <button type="submit" class="btn btn-primary" id="save-btn">
-                        <i class="fa-solid fa-check"></i> 저장하기
-                    </button>
+                    <button type="button" class="btn btn-secondary" id="cancel-modal">취소</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 저장</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
-
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
