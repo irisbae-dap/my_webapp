@@ -1,7 +1,10 @@
-"""Stepping Stones 학습 대시보드의 데이터 계층.
+"""Stepping Stones dashboard - data layer.
 
 DATABASE_URL(Supabase Postgres)이 있으면 Postgres를, 없으면 로컬 SQLite를 쓴다.
-덕분에 배포 환경은 데이터가 영구 보존되고, 로컬 개발은 설정 없이 그대로 돌아간다.
+
+데이터 원본: Google Drive `7_english_corpus.md`
+(Iris의 실제 영어 작성 + 코치 피드백 93개 대화, 2023-03 ~ 2026-02).
+지표는 모두 Iris 본인 발화에서만 계산한다. 코치 답변 텍스트는 제외한다.
 """
 
 import os
@@ -15,24 +18,52 @@ if USE_POSTGRES:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 elif os.environ.get('VERCEL'):
-    # 서버리스는 프로젝트 디렉터리가 읽기 전용이라 /tmp 를 쓴다.
     SQLITE_FILE = os.path.join('/tmp', 'steppingstones.db')
 else:
     SQLITE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'steppingstones.db')
 
-COACHES = ('Molly', 'Bill')
-ITEM_TYPES = ('vocab', 'expression', 'grammar', 'pronunciation')
-STATUSES = ('new', 'learning', 'mastered')
 
-# Stepping Stones 단계 정의. 누적 mastered 항목 수를 기준으로 삼는다.
-# 실제 Stepping Stones 기준이 확정되면 이 표만 고치면 전체 대시보드에 반영된다.
-STONES = [
-    {'no': 1, 'name': 'Foundation', 'label': '기초 다지기', 'target': 20},
-    {'no': 2, 'name': 'Momentum', 'label': '흐름 만들기', 'target': 50},
-    {'no': 3, 'name': 'Fluency', 'label': '유창성 구간', 'target': 100},
-    {'no': 4, 'name': 'Nuance', 'label': '뉘앙스 감각', 'target': 180},
-    {'no': 5, 'name': 'Mastery', 'label': '자유로운 표현', 'target': 300},
+# Stepping Stones 5-category 분석 모델 (05-project-stepping-stones.md, v2 기준).
+# measured=False 인 카테고리는 원문만으로 계산할 수 없어 값을 지어내지 않는다.
+CATEGORIES = [
+    {
+        'key': 'flow', 'rank': 1,
+        'name': 'Flow & Thought Process',
+        'blurb': 'How long and how varied your sentences are.',
+        'metric': 'avg_sentence_len', 'unit': 'words / sentence',
+        'direction': 'range', 'measured': True,
+    },
+    {
+        'key': 'discourse', 'rank': 2,
+        'name': 'Discourse & Voice',
+        'blurb': 'How often you soften what you say (hedging).',
+        'metric': 'hedge_per100', 'unit': 'per 100 words',
+        'direction': 'down', 'measured': True,
+    },
+    {
+        'key': 'accuracy', 'rank': 3,
+        'name': 'Accuracy',
+        'blurb': 'Grammar and word errors. Not measured yet.',
+        'metric': None, 'unit': '',
+        'direction': 'down', 'measured': False,
+    },
+    {
+        'key': 'nuance', 'rank': 4,
+        'name': 'Nuance & Lexical',
+        'blurb': 'How many different words you use.',
+        'metric': 'lexical_diversity', 'unit': '% unique words',
+        'direction': 'up', 'measured': True,
+    },
+    {
+        'key': 'habit', 'rank': 5,
+        'name': 'Habit Analysis',
+        'blurb': 'Filler words you repeat.',
+        'metric': 'filler_per100', 'unit': 'per 100 words',
+        'direction': 'down', 'measured': True,
+    },
 ]
+
+STATUSES = ('todo', 'working', 'done')
 
 
 def get_db():
@@ -44,16 +75,15 @@ def get_db():
 
 
 def _q(sql):
-    """플레이스홀더를 드라이버에 맞게 변환한다 (sqlite '?' -> psycopg2 '%s')."""
     return sql.replace('?', '%s') if USE_POSTGRES else sql
 
 
-def _rows(cursor):
-    return [dict(r) for r in cursor.fetchall()]
+def _rows(cur):
+    return [dict(r) for r in cur.fetchall()]
 
 
-def _one(cursor):
-    row = cursor.fetchone()
+def _one(cur):
+    row = cur.fetchone()
     return dict(row) if row else None
 
 
@@ -63,6 +93,7 @@ def _one(cursor):
 
 def init_db():
     serial = 'SERIAL PRIMARY KEY' if USE_POSTGRES else 'INTEGER PRIMARY KEY AUTOINCREMENT'
+    real = 'DOUBLE PRECISION' if USE_POSTGRES else 'REAL'
 
     conn = get_db()
     try:
@@ -70,28 +101,46 @@ def init_db():
         cur.execute(f'''
             CREATE TABLE IF NOT EXISTS sessions (
                 id {serial},
+                sid TEXT UNIQUE,
                 session_date TEXT NOT NULL,
-                coach TEXT NOT NULL,
-                topic TEXT DEFAULT '',
-                summary TEXT DEFAULT '',
-                duration_min INTEGER DEFAULT 0,
-                is_sample INTEGER DEFAULT 0,
+                title TEXT DEFAULT '',
+                tag TEXT DEFAULT '',
+                word_count INTEGER DEFAULT 0,
+                turn_count INTEGER DEFAULT 0,
+                sentence_count INTEGER DEFAULT 0,
+                unique_words INTEGER DEFAULT 0,
+                avg_sentence_len {real} DEFAULT 0,
+                sentence_len_sd {real} DEFAULT 0,
+                lexical_diversity {real} DEFAULT 0,
+                long_word_ratio {real} DEFAULT 0,
+                filler_count INTEGER DEFAULT 0,
+                filler_per100 {real} DEFAULT 0,
+                hedge_count INTEGER DEFAULT 0,
+                hedge_per100 {real} DEFAULT 0,
                 created_at TEXT NOT NULL
             )
         ''')
         cur.execute(f'''
-            CREATE TABLE IF NOT EXISTS items (
+            CREATE TABLE IF NOT EXISTS patterns (
                 id {serial},
-                session_id INTEGER,
-                item_type TEXT NOT NULL DEFAULT 'vocab',
-                term TEXT NOT NULL,
-                meaning TEXT DEFAULT '',
-                example TEXT DEFAULT '',
-                coach TEXT DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'new',
-                tags TEXT DEFAULT '',
+                sid TEXT,
+                session_date TEXT,
+                kind TEXT NOT NULL,
+                phrase TEXT NOT NULL,
+                count INTEGER DEFAULT 0
+            )
+        ''')
+        cur.execute(f'''
+            CREATE TABLE IF NOT EXISTS study_items (
+                id {serial},
+                kind TEXT NOT NULL DEFAULT 'habit',
+                category TEXT NOT NULL DEFAULT 'habit',
+                title TEXT NOT NULL,
+                detail TEXT DEFAULT '',
+                evidence TEXT DEFAULT '',
                 source_date TEXT DEFAULT '',
-                is_sample INTEGER DEFAULT 0,
+                source_title TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'todo',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -101,57 +150,146 @@ def init_db():
         conn.close()
 
 
-def has_any_data():
+def wipe_all():
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT COUNT(*) AS n FROM items')
-        return _one(cur)['n'] > 0
+        for t in ('patterns', 'study_items', 'sessions'):
+            cur.execute(f'DELETE FROM {t}')
+        conn.commit()
     finally:
         conn.close()
 
 
-def is_sample_only():
-    """현재 데이터가 전부 샘플인지. 대시보드 상단 배너 표시에 쓴다."""
+def session_count():
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT COUNT(*) AS n FROM items WHERE is_sample = 0')
-        real = _one(cur)['n']
-        cur.execute('SELECT COUNT(*) AS n FROM items')
-        total = _one(cur)['n']
-        return total > 0 and real == 0
+        cur.execute('SELECT COUNT(*) AS n FROM sessions')
+        return _one(cur)['n']
     finally:
         conn.close()
+
+
+# --------------------------------------------------------------------------
+# 적재
+# --------------------------------------------------------------------------
+
+SESSION_COLS = ('sid', 'session_date', 'title', 'tag', 'word_count', 'turn_count',
+                'sentence_count', 'unique_words', 'avg_sentence_len', 'sentence_len_sd',
+                'lexical_diversity', 'long_word_ratio', 'filler_count', 'filler_per100',
+                'hedge_count', 'hedge_per100')
+
+
+def load_dataset(payload, replace=True):
+    """추출기가 만든 JSON을 통째로 적재한다."""
+    if replace:
+        wipe_all()
+
+    now = datetime.now().isoformat()
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+
+        cols = ', '.join(SESSION_COLS) + ', created_at'
+        marks = ', '.join(['?'] * (len(SESSION_COLS) + 1))
+        for s in payload.get('sessions', []):
+            cur.execute(_q(f'INSERT INTO sessions ({cols}) VALUES ({marks})'),
+                        tuple(s.get(c, 0 if c not in ('sid', 'session_date', 'title', 'tag')
+                                    else '') for c in SESSION_COLS) + (now,))
+
+        for p in payload.get('patterns', []):
+            cur.execute(_q('INSERT INTO patterns (sid, session_date, kind, phrase, count)'
+                           ' VALUES (?, ?, ?, ?, ?)'),
+                        (p['sid'], p['session_date'], p['kind'], p['phrase'], p['count']))
+
+        for it in payload.get('study_items', []):
+            cur.execute(_q('INSERT INTO study_items (kind, category, title, detail, evidence,'
+                           ' source_date, source_title, status, created_at, updated_at)'
+                           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+                        (it.get('kind', 'habit'), it.get('category', 'habit'), it['title'],
+                         it.get('detail', ''), it.get('evidence', ''),
+                         it.get('source_date', ''), it.get('source_title', ''),
+                         it.get('status', 'todo'), now, now))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {'sessions': len(payload.get('sessions', [])),
+            'patterns': len(payload.get('patterns', [])),
+            'study_items': len(payload.get('study_items', []))}
 
 
 # --------------------------------------------------------------------------
 # 조회
 # --------------------------------------------------------------------------
 
-def fetch_items(search='', item_type='', status='', coach='', days=30):
-    query = 'SELECT * FROM items WHERE 1=1'
-    params = []
+def data_range():
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT MIN(session_date) AS a, MAX(session_date) AS b,'
+                    ' COUNT(*) AS n FROM sessions')
+        return _one(cur) or {'a': None, 'b': None, 'n': 0}
+    finally:
+        conn.close()
 
-    if days:
-        cutoff = (datetime.now() - timedelta(days=int(days))).strftime('%Y-%m-%d')
-        query += ' AND source_date >= ?'
-        params.append(cutoff)
-    if search:
-        query += ' AND (term LIKE ? OR meaning LIKE ? OR example LIKE ? OR tags LIKE ?)'
-        params.extend([f'%{search}%'] * 4)
-    if item_type:
-        query += ' AND item_type = ?'
-        params.append(item_type)
+
+def _window(days):
+    """데이터의 마지막 날짜를 기준으로 창을 잡는다.
+
+    오늘 기준으로 자르면 코퍼스가 2026-02에서 끝나 화면이 비어버린다.
+    """
+    r = data_range()
+    if not r['b']:
+        return '0000-00-00', '9999-99-99'
+    end = datetime.strptime(r['b'], '%Y-%m-%d').date()
+    if not days:
+        return '0000-00-00', r['b']
+    start = end - timedelta(days=int(days) - 1)
+    return start.strftime('%Y-%m-%d'), r['b']
+
+
+def fetch_sessions(days=None):
+    lo, hi = _window(days)
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(_q('SELECT * FROM sessions WHERE session_date >= ? AND session_date <= ?'
+                       ' ORDER BY session_date ASC, id ASC'), (lo, hi))
+        return _rows(cur)
+    finally:
+        conn.close()
+
+
+def fetch_patterns(kind, days=None, limit=8):
+    lo, hi = _window(days)
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(_q('SELECT phrase, SUM(count) AS total FROM patterns'
+                       ' WHERE kind = ? AND session_date >= ? AND session_date <= ?'
+                       ' GROUP BY phrase ORDER BY total DESC'), (kind, lo, hi))
+        rows = _rows(cur)
+        return [{'phrase': r['phrase'], 'total': int(r['total'])} for r in rows[:limit]]
+    finally:
+        conn.close()
+
+
+def fetch_study_items(status='', category='', search=''):
+    query = 'SELECT * FROM study_items WHERE 1=1'
+    params = []
     if status:
         query += ' AND status = ?'
         params.append(status)
-    if coach:
-        query += ' AND coach = ?'
-        params.append(coach)
-
-    query += (" ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'learning' THEN 2 ELSE 3 END,"
-              " source_date DESC, id DESC")
+    if category:
+        query += ' AND category = ?'
+        params.append(category)
+    if search:
+        query += ' AND (title LIKE ? OR detail LIKE ? OR evidence LIKE ?)'
+        params.extend([f'%{search}%'] * 3)
+    query += (" ORDER BY CASE status WHEN 'todo' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,"
+              " id ASC")
 
     conn = get_db()
     try:
@@ -162,293 +300,97 @@ def fetch_items(search='', item_type='', status='', coach='', days=30):
         conn.close()
 
 
-def get_item(item_id):
+def get_study_item(item_id):
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute(_q('SELECT * FROM items WHERE id = ?'), (item_id,))
+        cur.execute(_q('SELECT * FROM study_items WHERE id = ?'), (item_id,))
         return _one(cur)
     finally:
         conn.close()
 
 
-def fetch_sessions(days=30):
-    cutoff = (datetime.now() - timedelta(days=int(days))).strftime('%Y-%m-%d')
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute(_q('SELECT * FROM sessions WHERE session_date >= ?'
-                       ' ORDER BY session_date DESC, id DESC'), (cutoff,))
-        return _rows(cur)
-    finally:
-        conn.close()
-
-
-# --------------------------------------------------------------------------
-# 변경
-# --------------------------------------------------------------------------
-
-def set_status(item_id, status):
+def set_study_status(item_id, status):
     if status not in STATUSES:
-        return None
-    now = datetime.now().isoformat()
+        return False
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute(_q('UPDATE items SET status = ?, updated_at = ? WHERE id = ?'),
-                    (status, now, item_id))
+        cur.execute(_q('UPDATE study_items SET status = ?, updated_at = ? WHERE id = ?'),
+                    (status, datetime.now().isoformat(), item_id))
         conn.commit()
         return cur.rowcount > 0
     finally:
         conn.close()
-
-
-def add_item(term, meaning='', example='', item_type='vocab', coach='',
-             status='new', tags='', source_date='', session_id=None, is_sample=0):
-    now = datetime.now().isoformat()
-    source_date = source_date or datetime.now().strftime('%Y-%m-%d')
-    sql = ('INSERT INTO items (session_id, item_type, term, meaning, example, coach,'
-           ' status, tags, source_date, is_sample, created_at, updated_at)'
-           ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    params = (session_id, item_type, term, meaning, example, coach,
-              status, tags, source_date, is_sample, now, now)
-
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        if USE_POSTGRES:
-            cur.execute(_q(sql + ' RETURNING id'), params)
-            new_id = _one(cur)['id']
-        else:
-            cur.execute(sql, params)
-            new_id = cur.lastrowid
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-
-def add_session(session_date, coach, topic='', summary='', duration_min=0, is_sample=0):
-    now = datetime.now().isoformat()
-    sql = ('INSERT INTO sessions (session_date, coach, topic, summary, duration_min,'
-           ' is_sample, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    params = (session_date, coach, topic, summary, duration_min, is_sample, now)
-
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        if USE_POSTGRES:
-            cur.execute(_q(sql + ' RETURNING id'), params)
-            new_id = _one(cur)['id']
-        else:
-            cur.execute(sql, params)
-            new_id = cur.lastrowid
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-
-def delete_item(item_id):
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute(_q('DELETE FROM items WHERE id = ?'), (item_id,))
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
-
-
-def clear_sample_data():
-    """실제 데이터를 넣을 때 샘플만 걷어낸다."""
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute('DELETE FROM items WHERE is_sample = 1')
-        removed = cur.rowcount
-        cur.execute('DELETE FROM sessions WHERE is_sample = 1')
-        conn.commit()
-        return removed
-    finally:
-        conn.close()
-
-
-def import_payload(payload):
-    """대화 기록에서 뽑은 학습 자료를 한 번에 밀어 넣는다.
-
-    payload = {"sessions": [...], "items": [...], "replace_sample": true}
-    """
-    if payload.get('replace_sample', True):
-        clear_sample_data()
-
-    session_map = {}
-    for s in payload.get('sessions', []):
-        sid = add_session(
-            session_date=s.get('session_date', datetime.now().strftime('%Y-%m-%d')),
-            coach=s.get('coach', ''),
-            topic=s.get('topic', ''),
-            summary=s.get('summary', ''),
-            duration_min=int(s.get('duration_min', 0) or 0),
-        )
-        if s.get('key'):
-            session_map[s['key']] = sid
-
-    count = 0
-    for it in payload.get('items', []):
-        if not it.get('term'):
-            continue
-        add_item(
-            term=it['term'],
-            meaning=it.get('meaning', ''),
-            example=it.get('example', ''),
-            item_type=it.get('item_type', 'vocab'),
-            coach=it.get('coach', ''),
-            status=it.get('status', 'new'),
-            tags=it.get('tags', ''),
-            source_date=it.get('source_date', ''),
-            session_id=session_map.get(it.get('session_key')),
-        )
-        count += 1
-    return count
 
 
 # --------------------------------------------------------------------------
 # 분석
 # --------------------------------------------------------------------------
 
-def get_analytics(days=30):
-    items = fetch_items(days=days)
-    sessions = fetch_sessions(days=days)
+def _avg(values):
+    vals = [v for v in values if v is not None]
+    return round(sum(vals) / len(vals), 2) if vals else 0.0
 
-    by_status = {s: 0 for s in STATUSES}
-    by_type = {t: 0 for t in ITEM_TYPES}
-    by_coach = {c: 0 for c in COACHES}
-    for it in items:
-        by_status[it['status']] = by_status.get(it['status'], 0) + 1
-        by_type[it['item_type']] = by_type.get(it['item_type'], 0) + 1
-        if it.get('coach'):
-            by_coach[it['coach']] = by_coach.get(it['coach'], 0) + 1
 
-    # 주간 추이 (최근 4주, 오래된 주 -> 최근 주)
-    today = datetime.now().date()
-    weekly = []
-    for w in range(3, -1, -1):
-        end = today - timedelta(days=7 * w)
-        start = end - timedelta(days=6)
-        s, e = start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
-        weekly.append({
-            'label': start.strftime('%m/%d'),
-            'items': sum(1 for it in items if s <= (it.get('source_date') or '') <= e),
-            'sessions': sum(1 for x in sessions if s <= (x.get('session_date') or '') <= e),
+def _trend(sessions, metric, buckets=6):
+    """세션을 시간순 n구간으로 나눠 구간 평균을 낸다 (성장 추이용)."""
+    if not sessions:
+        return []
+    size = max(1, -(-len(sessions) // buckets))
+    out = []
+    for i in range(0, len(sessions), size):
+        grp = sessions[i:i + size]
+        out.append({
+            'label': grp[0]['session_date'][2:7].replace('-', '/'),
+            'value': _avg([g.get(metric) for g in grp]),
+            'sessions': len(grp),
         })
+    return out[-buckets:]
 
-    mastered_total = _count_mastered_all_time()
-    current, nxt = _stone_progress(mastered_total)
 
-    total = len(items)
+def get_overview(days=None):
+    sessions = fetch_sessions(days)
+    rng = data_range()
+
+    cats = []
+    for c in CATEGORIES:
+        entry = {k: c[k] for k in ('key', 'rank', 'name', 'blurb', 'unit',
+                                   'direction', 'measured')}
+        if c['measured'] and sessions:
+            metric = c['metric']
+            entry['value'] = _avg([s.get(metric) for s in sessions])
+            entry['trend'] = _trend(sessions, metric)
+            first_half = sessions[:max(1, len(sessions) // 2)]
+            second_half = sessions[max(1, len(sessions) // 2):] or first_half
+            a, b = _avg([s.get(metric) for s in first_half]), _avg([s.get(metric) for s in second_half])
+            entry['change'] = round(b - a, 2)
+        else:
+            entry['value'] = None
+            entry['trend'] = []
+            entry['change'] = None
+        cats.append(entry)
+
+    items = fetch_study_items()
+    done = sum(1 for i in items if i['status'] == 'done')
+
     return {
-        'window_days': int(days),
-        'total_items': total,
-        'total_sessions': len(sessions),
-        'study_minutes': sum(int(x.get('duration_min') or 0) for x in sessions),
-        'mastered_total': mastered_total,
-        'mastery_rate': round(by_status['mastered'] / total * 100) if total else 0,
-        'by_status': by_status,
-        'by_type': by_type,
-        'by_coach': by_coach,
-        'weekly': weekly,
-        'stones': STONES,
-        'current_stone': current,
-        'next_stone': nxt,
-        'is_sample_only': is_sample_only(),
+        'window_days': days,
+        'data_from': rng['a'],
+        'data_to': rng['b'],
+        'total_sessions_all': rng['n'],
+        'sessions': len(sessions),
+        'words': sum(int(s['word_count'] or 0) for s in sessions),
+        'pebbles': len(sessions),
+        'study_total': len(items),
+        'study_done': done,
+        'categories': cats,
+        'fillers': fetch_patterns('filler', days),
+        'hedges': fetch_patterns('hedge', days),
+        'volume_trend': _trend(sessions, 'word_count'),
+        'recent': [
+            {'date': s['session_date'], 'title': s['title'], 'tag': s['tag'],
+             'words': s['word_count']}
+            for s in list(reversed(sessions))[:8]
+        ],
     }
-
-
-def _count_mastered_all_time():
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) AS n FROM items WHERE status = 'mastered'")
-        return _one(cur)['n']
-    finally:
-        conn.close()
-
-
-def _stone_progress(mastered):
-    current = STONES[0]
-    for s in STONES:
-        if mastered >= s['target']:
-            current = s
-    nxt = next((s for s in STONES if s['target'] > mastered), None)
-
-    if nxt is None:
-        return {**current, 'reached': True, 'percent': 100}, None
-
-    prev_target = 0
-    for s in STONES:
-        if s['target'] <= mastered:
-            prev_target = s['target']
-    span = nxt['target'] - prev_target
-    done = mastered - prev_target
-    percent = round(done / span * 100) if span else 0
-
-    reached = mastered >= STONES[0]['target']
-    return ({**current, 'reached': reached, 'percent': percent},
-            {**nxt, 'remaining': nxt['target'] - mastered})
-
-
-# --------------------------------------------------------------------------
-# 샘플 데이터 (실제 코칭 기록이 아님 - is_sample=1 로 명확히 표시)
-# --------------------------------------------------------------------------
-
-def seed_sample_data():
-    """대시보드 동작 확인용 표본. 실제 몰리/빌 코칭 기록이 아니다.
-
-    실제 자료를 넣으면 clear_sample_data()로 전부 사라진다.
-    """
-    if has_any_data():
-        return 0
-
-    today = datetime.now().date()
-
-    def d(offset):
-        return (today - timedelta(days=offset)).strftime('%Y-%m-%d')
-
-    sessions = [
-        (d(2), 'Molly', 'Small talk 확장', '날씨/주말 주제에서 후속 질문 연결 연습', 40),
-        (d(5), 'Bill', 'Business email tone', '완곡 표현과 직설 표현의 경계 정리', 45),
-        (d(9), 'Molly', 'Phrasal verbs', 'get/take 계열 구동사 집중', 40),
-        (d(13), 'Bill', 'Presentation opening', '도입부 3문장 구조 훈련', 50),
-        (d(18), 'Molly', 'Listening shadowing', '뉴스 클립 섀도잉', 35),
-        (d(24), 'Bill', 'Negotiation phrases', '조건 제시 표현', 45),
-    ]
-    for sd, coach, topic, summary, dur in sessions:
-        add_session(sd, coach, topic, summary, dur, is_sample=1)
-
-    items = [
-        ('touch base', '간단히 연락하다', "Let's touch base next week.", 'expression', 'Bill', 'mastered', 'business', 5),
-        ('circle back', '다시 논의하다', 'I will circle back on this tomorrow.', 'expression', 'Bill', 'mastered', 'business', 5),
-        ('get around to', '~할 시간을 내다', 'I finally got around to it.', 'vocab', 'Molly', 'learning', 'phrasal', 9),
-        ('take up on', '제안을 받아들이다', "I'll take you up on that offer.", 'vocab', 'Molly', 'new', 'phrasal', 9),
-        ('would you mind ~ing', '~해 주시겠어요 (공손)', 'Would you mind sending the file?', 'grammar', 'Bill', 'mastered', 'politeness', 5),
-        ('I was wondering if', '~인지 궁금했어요 (완곡)', 'I was wondering if you had time.', 'grammar', 'Bill', 'learning', 'politeness', 5),
-        ('schedule', '미국식 발음 주의 (스케줄)', 'The schedule is tight.', 'pronunciation', 'Molly', 'learning', 'sound', 18),
-        ('comfortable', '3음절로 축약해 발음', 'Make yourself comfortable.', 'pronunciation', 'Molly', 'mastered', 'sound', 18),
-        ('to be honest', '솔직히 말하면', 'To be honest, I disagree.', 'expression', 'Molly', 'mastered', 'smalltalk', 2),
-        ('speaking of which', '말이 나온 김에', 'Speaking of which, did you finish?', 'expression', 'Molly', 'learning', 'smalltalk', 2),
-        ('follow up on', '후속 조치하다', 'Let me follow up on that.', 'vocab', 'Bill', 'mastered', 'business', 24),
-        ('in terms of', '~의 측면에서', 'In terms of cost, it works.', 'expression', 'Bill', 'mastered', 'presentation', 13),
-        ('walk you through', '차근차근 설명하다', "I'll walk you through the data.", 'expression', 'Bill', 'learning', 'presentation', 13),
-        ('narrow down', '범위를 좁히다', 'We narrowed down the options.', 'vocab', 'Bill', 'new', 'negotiation', 24),
-        ('meet halfway', '절충하다', 'Can we meet halfway on price?', 'expression', 'Bill', 'new', 'negotiation', 24),
-        ('run by', '의견을 구하다', 'Can I run this by you?', 'vocab', 'Molly', 'learning', 'business', 9),
-        ('used to vs be used to', '과거 습관 / 익숙함', 'I used to live there. I am used to it.', 'grammar', 'Molly', 'learning', 'confusing', 9),
-        ('rather than', '~보다는', 'Rather than wait, I called.', 'grammar', 'Bill', 'mastered', 'writing', 5),
-        ('pick up on', '알아채다', 'She picked up on my hesitation.', 'vocab', 'Molly', 'new', 'phrasal', 2),
-        ('bring up', '화제를 꺼내다', 'He brought up a good point.', 'vocab', 'Molly', 'mastered', 'phrasal', 18),
-    ]
-    for term, meaning, example, itype, coach, status, tags, ago in items:
-        add_item(term, meaning, example, itype, coach, status, tags, d(ago), is_sample=1)
-
-    return len(items)

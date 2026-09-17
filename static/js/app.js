@@ -1,399 +1,279 @@
-/* ==========================================================================
-   Stepping Stones - English Coaching Dashboard
-   ========================================================================== */
+/* Stepping Stones — dashboard logic. Charts are inline SVG, no libraries. */
 
-const state = {
-    days: 30,
-    status: '',
-    type: '',
-    coach: '',
-    search: '',
-};
-
+const state = { days: '', status: '', category: '', search: '' };
 let searchTimer = null;
 
-const TYPE_LABEL = {
-    vocab: '단어 · 구동사',
-    expression: '표현',
-    grammar: '문법',
-    pronunciation: '발음',
+const CAT_ICON = {
+    flow: 'fa-water',
+    discourse: 'fa-comment-dots',
+    accuracy: 'fa-circle-check',
+    nuance: 'fa-feather',
+    habit: 'fa-repeat',
 };
 
-const STATUS_LABEL = { new: '새 항목', learning: '학습 중', mastered: '마스터' };
-const STATUS_ORDER = ['new', 'learning', 'mastered'];
-const NEXT_STATUS = { new: 'learning', learning: 'mastered', mastered: 'new' };
+const STATUS_LABEL = { todo: 'To do', working: 'Working on it', done: 'Done' };
+const NEXT_STATUS = { todo: 'working', working: 'done', done: 'todo' };
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+    bindChips('.range .chip', btn => { state.days = btn.dataset.days; loadOverview(); });
+    bindChips('#status-tabs .chip', btn => { state.status = btn.dataset.status; loadStudy(); });
+    bindChips('#cat-tabs .chip', btn => { state.category = btn.dataset.category; loadStudy(); });
 
-    document.querySelectorAll('.range-tabs .tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.range-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.days = Number(btn.dataset.days);
-            refreshAll();
-        });
-    });
-
-    document.querySelectorAll('#status-tabs .tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('#status-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.status = btn.dataset.status;
-            loadItems();
-        });
-    });
-
-    document.getElementById('type-filter').addEventListener('change', e => {
-        state.type = e.target.value;
-        loadItems();
-    });
-    document.getElementById('coach-filter').addEventListener('change', e => {
-        state.coach = e.target.value;
-        loadItems();
-    });
-
-    const searchInput = document.getElementById('search-input');
-    const clearBtn = document.getElementById('clear-search-btn');
-    searchInput.addEventListener('input', () => {
-        clearBtn.hidden = !searchInput.value;
+    document.getElementById('search').addEventListener('input', e => {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(() => {
-            state.search = searchInput.value.trim();
-            loadItems();
-        }, 300);
-    });
-    clearBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        clearBtn.hidden = true;
-        state.search = '';
-        loadItems();
+        searchTimer = setTimeout(() => { state.search = e.target.value.trim(); loadStudy(); }, 300);
     });
 
-    document.getElementById('add-btn').addEventListener('click', openModal);
-    document.getElementById('close-modal').addEventListener('click', closeModal);
-    document.getElementById('cancel-modal').addEventListener('click', closeModal);
-    document.getElementById('item-form').addEventListener('submit', submitItem);
-
-    refreshAll();
+    loadOverview();
+    loadStudy();
 });
 
-function refreshAll() {
-    loadAnalytics();
-    loadItems();
+function bindChips(selector, handler) {
+    const group = document.querySelectorAll(selector);
+    group.forEach(btn => btn.addEventListener('click', () => {
+        group.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        handler(btn);
+    }));
 }
 
-/* ---------------------------------------------------------------- 데이터 */
+/* ------------------------------------------------------------- overview */
 
-async function loadAnalytics() {
+async function loadOverview() {
+    const qs = state.days ? `?days=${state.days}` : '';
     try {
-        const res = await fetch(`/api/analytics?days=${state.days}`);
-        if (!res.ok) throw new Error('analytics failed');
-        const a = await res.json();
+        const res = await fetch(`/api/overview${qs}`);
+        if (!res.ok) throw new Error('overview failed');
+        const d = await res.json();
 
-        document.getElementById('sample-banner').hidden = !a.is_sample_only;
+        document.getElementById('source-note').textContent =
+            d.total_sessions_all
+                ? `Your data covers ${d.data_from} to ${d.data_to} — ${d.total_sessions_all} sessions in total. Showing ${d.sessions} of them.`
+                : 'No data loaded yet.';
 
-        document.getElementById('stat-items').textContent = a.total_items;
-        document.getElementById('stat-sessions').textContent = a.total_sessions;
-        document.getElementById('stat-minutes').textContent = formatMinutes(a.study_minutes);
-        document.getElementById('stat-rate').textContent = `${a.mastery_rate}%`;
+        setText('hero-pebbles', d.pebbles);
+        setText('hero-sessions', d.sessions);
+        setText('hero-words', d.words.toLocaleString());
+        setText('hero-study', d.study_total);
+        setText('hero-done', d.study_done);
 
-        renderStones(a);
-        renderWeekly(a.weekly);
-        renderTypes(a.by_type);
-        renderStatus(a.by_status, a.total_items);
-        renderCoachSplit(a.by_coach);
+        renderTower(d.pebbles);
+        renderCategories(d.categories);
+        renderPhraseChart('chart-filler', d.fillers, 1);
+        renderPhraseChart('chart-hedge', d.hedges, 2);
+        renderRecent(d.recent);
     } catch (err) {
         console.error(err);
-        showToast('분석 데이터를 불러오지 못했습니다.', 'danger');
+        toast('Could not load your dashboard.', 'bad');
     }
 }
 
-async function loadItems() {
-    const params = new URLSearchParams({ days: state.days });
-    if (state.search) params.append('search', state.search);
-    if (state.status) params.append('status', state.status);
-    if (state.type) params.append('type', state.type);
-    if (state.coach) params.append('coach', state.coach);
+function setText(id, v) { document.getElementById(id).textContent = v; }
 
-    try {
-        const res = await fetch(`/api/items?${params}`);
-        if (!res.ok) throw new Error('items failed');
-        renderItems(await res.json());
-    } catch (err) {
-        console.error(err);
-        showToast('학습 목록을 불러오지 못했습니다.', 'danger');
-    }
-}
-
-/* ------------------------------------------------------- Stepping Stones */
-
-function renderStones(a) {
-    const cur = a.current_stone || {};
-    const next = a.next_stone;
-
-    document.getElementById('stone-mastered').textContent = a.mastered_total;
-    document.getElementById('stone-name').textContent =
-        cur.reached ? `${cur.no}. ${cur.name}` : '시작 전';
-    document.getElementById('stone-caption').textContent = next
-        ? `${next.name}(${next.label})까지 ${next.remaining}개 남았습니다.`
-        : '마지막 단계에 도달했습니다.';
-
-    const track = document.getElementById('stone-track');
-    track.innerHTML = '';
-
-    a.stones.forEach(s => {
-        const done = a.mastered_total >= s.target;
-        const active = !done && (!next || next.no === s.no);
-        const li = document.createElement('li');
-        li.className = `stone ${done ? 'done' : ''} ${active ? 'active' : ''}`;
-        li.innerHTML = `
-            <span class="stone-dot">${done ? '<i class="fa-solid fa-check"></i>' : s.no}</span>
-            <span class="stone-name">${escapeHtml(s.name)}</span>
-            <span class="stone-target">${s.target}개</span>
-        `;
-        track.appendChild(li);
-    });
-
-    // 현재 구간 진행률
-    const pct = cur.percent || 0;
-    track.style.setProperty('--stone-progress', `${pct}%`);
-}
-
-/* ------------------------------------------------------------------ 차트 */
-
-// 주차별 학습 항목 — 단일 계열이므로 범례 없이 직접 라벨만 단다.
-function renderWeekly(weekly) {
-    const w = 520, h = 210, pad = { t: 24, r: 12, b: 34, l: 12 };
-    const max = Math.max(1, ...weekly.map(d => d.items));
-    const plotH = h - pad.t - pad.b;
-    const bw = (w - pad.l - pad.r) / weekly.length;
-    const barW = Math.min(64, bw - 18);
-
-    const bars = weekly.map((d, i) => {
-        const bh = Math.max(d.items > 0 ? 4 : 0, (d.items / max) * plotH);
-        const x = pad.l + i * bw + (bw - barW) / 2;
-        const y = pad.t + plotH - bh;
-        return `
-            <g class="bar-group" tabindex="0" role="listitem"
-               aria-label="${d.label} 주 ${d.items}개, 세션 ${d.sessions}회">
-                <rect class="bar-hit" x="${pad.l + i * bw}" y="${pad.t}" width="${bw}" height="${plotH}"></rect>
-                <rect class="bar" x="${x}" y="${y}" width="${barW}" height="${bh}" rx="4"></rect>
-                <text class="bar-value" x="${x + barW / 2}" y="${y - 8}">${d.items}</text>
-                <text class="axis-label" x="${x + barW / 2}" y="${h - 12}">${d.label}</text>
-                <title>${d.label} 주 · 항목 ${d.items}개 · 세션 ${d.sessions}회</title>
-            </g>`;
+// 돌탑: 세션 수를 눈에 보이는 더미로. 최대 24개까지 그리고 나머지는 숫자로 둔다.
+function renderTower(n) {
+    const tower = document.getElementById('tower');
+    const shown = Math.min(n, 24);
+    tower.innerHTML = Array.from({ length: shown }, (_, i) => {
+        const w = 26 + ((i * 7) % 22);
+        return `<span class="stone" style="width:${w}px;animation-delay:${i * 22}ms"></span>`;
     }).join('');
-
-    document.getElementById('chart-weekly').innerHTML = `
-        <svg viewBox="0 0 ${w} ${h}" class="chart chart-weekly" role="list"
-             aria-label="주차별 학습 항목 수">
-            <line class="axis-line" x1="${pad.l}" y1="${pad.t + plotH}" x2="${w - pad.r}" y2="${pad.t + plotH}"></line>
-            ${bars}
-        </svg>`;
 }
 
-// 유형별 분포 — 가로 막대에 값 직접 표기.
-function renderTypes(byType) {
-    const entries = Object.entries(byType);
-    const max = Math.max(1, ...entries.map(([, v]) => v));
+/* ------------------------------------------------- five category modules */
 
-    document.getElementById('chart-type').innerHTML = `
-        <ul class="hbar-list">
-            ${entries.map(([k, v], i) => `
-                <li class="hbar-row">
-                    <span class="hbar-label">
-                        <span class="swatch swatch-${i + 1}" aria-hidden="true"></span>
-                        ${escapeHtml(TYPE_LABEL[k] || k)}
+function renderCategories(cats) {
+    const grid = document.getElementById('cat-grid');
+    grid.innerHTML = '';
+
+    cats.forEach(c => {
+        const card = document.createElement('article');
+        card.className = `card cat cat-${c.key}${c.measured ? '' : ' not-measured'}`;
+
+        let body;
+        if (!c.measured) {
+            body = `<p class="cat-empty">
+                        <i class="fa-regular fa-circle-question"></i>
+                        We cannot measure this from your text yet.
+                    </p>`;
+        } else {
+            body = `
+                <div class="cat-value">
+                    <span class="num">${c.value}</span>
+                    <span class="unit">${escapeHtml(c.unit)}</span>
+                    ${changeBadge(c)}
+                </div>
+                ${sparkline(c)}`;
+        }
+
+        card.innerHTML = `
+            <div class="cat-head">
+                <span class="cat-rank">${c.rank}</span>
+                <i class="fa-solid ${CAT_ICON[c.key] || 'fa-circle'}" aria-hidden="true"></i>
+                <div>
+                    <h3>${escapeHtml(c.name)}</h3>
+                    <p>${escapeHtml(c.blurb)}</p>
+                </div>
+            </div>
+            ${body}`;
+        grid.appendChild(card);
+    });
+}
+
+function changeBadge(c) {
+    if (c.change === null || c.change === 0) return '<span class="badge flat">no change</span>';
+    const up = c.change > 0;
+    // direction: 'up' = 높을수록 좋음, 'down' = 낮을수록 좋음, 'range' = 판단하지 않음
+    let cls = 'flat';
+    if (c.direction === 'up') cls = up ? 'good' : 'watch';
+    if (c.direction === 'down') cls = up ? 'watch' : 'good';
+    const arrow = up ? '▲' : '▼';
+    return `<span class="badge ${cls}">${arrow} ${Math.abs(c.change)} vs earlier</span>`;
+}
+
+// 스파크라인: 계열이 하나뿐이라 범례 없이 끝점만 직접 라벨한다.
+function sparkline(c) {
+    const pts = c.trend || [];
+    if (pts.length < 2) return '<p class="cat-empty">Not enough sessions yet.</p>';
+
+    const w = 300, h = 74, pad = 10;
+    const vals = pts.map(p => p.value);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || 1;
+    const x = i => pad + (i * (w - pad * 2)) / (pts.length - 1);
+    const y = v => pad + (h - pad * 2) * (1 - (v - min) / span);
+
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+    const area = `${line} L${x(pts.length - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
+    const last = pts[pts.length - 1];
+
+    return `
+        <svg class="spark" viewBox="0 0 ${w} ${h}" role="img"
+             aria-label="${pts.map(p => `${p.label}: ${p.value}`).join(', ')}">
+            <path class="spark-area" d="${area}"></path>
+            <path class="spark-line" d="${line}"></path>
+            ${pts.map((p, i) => `<circle class="spark-dot" cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3"><title>${p.label}: ${p.value}</title></circle>`).join('')}
+        </svg>
+        <div class="spark-foot"><span>${escapeHtml(pts[0].label)}</span><span>${escapeHtml(last.label)} · ${last.value}</span></div>`;
+}
+
+/* ------------------------------------------------------------- 빈도 차트 */
+
+function renderPhraseChart(elId, rows, slot) {
+    const el = document.getElementById(elId);
+    if (!rows || !rows.length) {
+        el.innerHTML = '<p class="cat-empty">Nothing found in this range.</p>';
+        return;
+    }
+    const max = Math.max(...rows.map(r => r.total));
+    el.innerHTML = `
+        <ul class="bars">
+            ${rows.map(r => `
+                <li>
+                    <span class="bar-label">${escapeHtml(r.phrase)}</span>
+                    <span class="bar-track">
+                        <span class="bar-fill s${slot}" style="width:${(r.total / max) * 100}%"></span>
                     </span>
-                    <span class="hbar-track">
-                        <span class="hbar-fill fill-${i + 1}" style="width:${(v / max) * 100}%"></span>
-                    </span>
-                    <span class="hbar-value">${v}</span>
+                    <span class="bar-num">${r.total}</span>
                 </li>`).join('')}
         </ul>`;
 }
 
-// 숙련도 구성 — 상태 색은 예약 팔레트를 쓰고 라벨을 항상 붙인다.
-function renderStatus(byStatus, total) {
-    const segs = STATUS_ORDER.map(k => ({ key: k, value: byStatus[k] || 0 }));
-    const sum = total || segs.reduce((a, s) => a + s.value, 0) || 1;
-
-    document.getElementById('chart-status').innerHTML = `
-        <div class="stack-bar" role="img"
-             aria-label="${segs.map(s => `${STATUS_LABEL[s.key]} ${s.value}개`).join(', ')}">
-            ${segs.filter(s => s.value > 0).map(s => `
-                <span class="stack-seg seg-${s.key}" style="flex:${s.value}">
-                    <span class="seg-num">${s.value}</span>
-                </span>`).join('')}
-        </div>
-        <ul class="legend">
-            ${segs.map(s => `
-                <li><span class="swatch seg-${s.key}" aria-hidden="true"></span>
-                    ${STATUS_LABEL[s.key]} <b>${s.value}</b>
-                    <span class="muted">${Math.round(s.value / sum * 100)}%</span></li>`).join('')}
-        </ul>`;
+function renderRecent(rows) {
+    document.getElementById('recent-body').innerHTML = (rows || []).map(r => `
+        <tr>
+            <td class="mono">${escapeHtml(r.date)}</td>
+            <td>${escapeHtml(r.title)}</td>
+            <td><span class="tag">${escapeHtml((r.tag || '').replace('keep_', ''))}</span></td>
+            <td class="num">${r.words}</td>
+        </tr>`).join('');
 }
 
-function renderCoachSplit(byCoach) {
-    const entries = Object.entries(byCoach);
-    document.getElementById('coach-split').innerHTML = entries.map(([name, v], i) => `
-        <div class="coach-chip">
-            <span class="swatch swatch-${i + 1}" aria-hidden="true"></span>
-            <span class="coach-name">${escapeHtml(name)}</span>
-            <b>${v}</b><span class="muted">개</span>
-        </div>`).join('');
+/* ----------------------------------------------------------- study list */
+
+async function loadStudy() {
+    const p = new URLSearchParams();
+    if (state.status) p.append('status', state.status);
+    if (state.category) p.append('category', state.category);
+    if (state.search) p.append('search', state.search);
+
+    try {
+        const res = await fetch(`/api/study?${p}`);
+        if (!res.ok) throw new Error('study failed');
+        renderStudy(await res.json());
+    } catch (err) {
+        console.error(err);
+        toast('Could not load your study list.', 'bad');
+    }
 }
 
-/* ------------------------------------------------------------ 학습 리스트 */
-
-function renderItems(items) {
-    const list = document.getElementById('item-list');
-    const empty = document.getElementById('empty-state');
+function renderStudy(items) {
+    const list = document.getElementById('study-list');
+    const empty = document.getElementById('study-empty');
     list.innerHTML = '';
 
-    if (!items.length) {
-        empty.hidden = false;
-        return;
-    }
+    if (!items.length) { empty.hidden = false; return; }
     empty.hidden = true;
 
     items.forEach(it => {
-        const card = document.createElement('article');
-        card.className = `item-card status-${it.status}`;
-        card.innerHTML = `
-            <button class="status-toggle seg-${it.status}"
-                    title="클릭하면 다음 단계로 (새 항목 → 학습 중 → 마스터)"
-                    data-id="${it.id}" data-next="${NEXT_STATUS[it.status]}">
-                ${it.status === 'mastered' ? '<i class="fa-solid fa-check"></i>'
-                  : it.status === 'learning' ? '<i class="fa-solid fa-rotate"></i>'
+        const row = document.createElement('article');
+        row.className = `card study st-${it.status}`;
+        row.innerHTML = `
+            <button class="mark-btn ${it.status}" data-id="${it.id}" data-next="${NEXT_STATUS[it.status]}"
+                    title="Click to change: To do → Working on it → Done">
+                ${it.status === 'done' ? '<i class="fa-solid fa-check"></i>'
+                  : it.status === 'working' ? '<i class="fa-solid fa-spinner"></i>'
                   : '<i class="fa-regular fa-circle"></i>'}
             </button>
-            <div class="item-body">
-                <div class="item-head">
-                    <h4>${escapeHtml(it.term)}</h4>
-                    <span class="badge badge-type">${escapeHtml(TYPE_LABEL[it.item_type] || it.item_type)}</span>
-                    ${it.coach ? `<span class="badge badge-coach">${escapeHtml(it.coach)}</span>` : ''}
-                    <span class="badge seg-${it.status}">${STATUS_LABEL[it.status]}</span>
+            <div class="study-body">
+                <div class="study-head">
+                    <h4>${escapeHtml(it.title)}</h4>
+                    <span class="pill cat-${it.category}">${escapeHtml(it.category)}</span>
+                    <span class="pill status ${it.status}">${STATUS_LABEL[it.status]}</span>
                 </div>
-                ${it.meaning ? `<p class="item-meaning">${escapeHtml(it.meaning)}</p>` : ''}
-                ${it.example ? `<p class="item-example">“${escapeHtml(it.example)}”</p>` : ''}
-                <div class="item-foot">
-                    ${it.source_date ? `<span><i class="fa-regular fa-calendar"></i> ${escapeHtml(it.source_date)}</span>` : ''}
-                    ${it.tags ? escapeHtml(it.tags).split(',').map(t =>
-                        `<span class="tag">#${t.trim()}</span>`).join('') : ''}
-                </div>
-            </div>
-            <button class="icon-btn btn-delete" data-del="${it.id}" title="삭제">
-                <i class="fa-solid fa-trash-can"></i>
-            </button>`;
-        list.appendChild(card);
+                <p class="study-detail">${escapeHtml(it.detail)}</p>
+                <p class="study-evidence">
+                    <i class="fa-solid fa-chart-simple"></i> ${escapeHtml(it.evidence)}
+                    ${it.source_title ? ` · from “${escapeHtml(it.source_title)}”` : ''}
+                </p>
+            </div>`;
+        list.appendChild(row);
     });
 
-    list.querySelectorAll('.status-toggle').forEach(btn => {
-        btn.addEventListener('click', () => cycleStatus(btn.dataset.id, btn.dataset.next));
-    });
-    list.querySelectorAll('[data-del]').forEach(btn => {
-        btn.addEventListener('click', () => deleteItem(btn.dataset.del));
+    list.querySelectorAll('.mark-btn').forEach(btn => {
+        btn.addEventListener('click', () => setStatus(btn.dataset.id, btn.dataset.next));
     });
 }
 
-async function cycleStatus(id, next) {
+async function setStatus(id, next) {
     try {
-        const res = await fetch(`/api/items/${id}/status`, {
+        const res = await fetch(`/api/study/${id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: next }),
         });
         if (!res.ok) throw new Error('status failed');
-        await refreshAll();
-        showToast(`${STATUS_LABEL[next]}(으)로 변경했습니다.`, 'success');
+        await Promise.all([loadStudy(), loadOverview()]);
+        toast(`Moved to “${STATUS_LABEL[next]}”.`, 'good');
     } catch (err) {
         console.error(err);
-        showToast('상태 변경에 실패했습니다.', 'danger');
+        toast('Could not save that change.', 'bad');
     }
 }
 
-async function deleteItem(id) {
-    if (!confirm('이 학습 항목을 삭제할까요?')) return;
-    try {
-        const res = await fetch(`/api/items/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('delete failed');
-        await refreshAll();
-        showToast('삭제했습니다.', 'info');
-    } catch (err) {
-        console.error(err);
-        showToast('삭제에 실패했습니다.', 'danger');
-    }
+/* ------------------------------------------------------------------ util */
+
+function toast(msg, kind = 'info') {
+    const box = document.getElementById('toasts');
+    const el = document.createElement('div');
+    el.className = `toast ${kind}`;
+    el.textContent = msg;
+    box.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 2600);
 }
 
-/* ------------------------------------------------------------------ 모달 */
-
-function openModal() {
-    document.getElementById('item-form').reset();
-    document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('item-modal').classList.add('active');
-}
-
-function closeModal() {
-    document.getElementById('item-modal').classList.remove('active');
-}
-
-async function submitItem(e) {
-    e.preventDefault();
-    const payload = {
-        term: document.getElementById('f-term').value.trim(),
-        meaning: document.getElementById('f-meaning').value.trim(),
-        example: document.getElementById('f-example').value.trim(),
-        item_type: document.getElementById('f-type').value,
-        coach: document.getElementById('f-coach').value,
-        tags: document.getElementById('f-tags').value.trim(),
-        source_date: document.getElementById('f-date').value,
-    };
-    if (!payload.term) return;
-
-    try {
-        const res = await fetch('/api/items', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error('create failed');
-        closeModal();
-        await refreshAll();
-        showToast('학습 항목을 추가했습니다.', 'success');
-    } catch (err) {
-        console.error(err);
-        showToast('저장 중 오류가 발생했습니다.', 'danger');
-    }
-}
-
-/* ------------------------------------------------------------------ 유틸 */
-
-function formatMinutes(m) {
-    if (!m) return '0분';
-    const h = Math.floor(m / 60);
-    return h ? `${h}시간 ${m % 60}분` : `${m}분`;
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    const icon = type === 'success' ? 'fa-circle-check'
-        : type === 'danger' ? 'fa-circle-exclamation' : 'fa-circle-info';
-    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        setTimeout(() => toast.remove(), 300);
-    }, 2800);
-}
-
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+function escapeHtml(t) {
+    if (t === null || t === undefined) return '';
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }

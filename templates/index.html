@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stepping Stones | English Coaching Dashboard</title>
+    <title>Stepping Stones — My English Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -11,222 +11,115 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-background">
-        <div class="glow-orb orb-1"></div>
-        <div class="glow-orb orb-2"></div>
-        <div class="glow-orb orb-3"></div>
-    </div>
+<div class="page">
 
-    <div class="app-container">
-        <header class="app-header">
-            <div class="brand">
-                <div class="logo-icon"><i class="fa-solid fa-shoe-prints"></i></div>
-                <div class="brand-text">
-                    <h1>Stepping <span>Stones</span></h1>
-                    <p>몰리 · 빌 English coaching 학습 분석 대시보드</p>
-                </div>
+    <header class="top">
+        <div class="brand">
+            <div class="mark" aria-hidden="true">
+                <span class="pebble p3"></span>
+                <span class="pebble p2"></span>
+                <span class="pebble p1"></span>
             </div>
-            <div class="header-actions">
-                <div class="range-tabs" role="group" aria-label="기간 선택">
-                    <button class="tab-btn" data-days="7">7일</button>
-                    <button class="tab-btn active" data-days="30">30일</button>
-                    <button class="tab-btn" data-days="90">90일</button>
-                </div>
-                <button class="btn btn-primary btn-glow" id="add-btn">
-                    <i class="fa-solid fa-plus"></i> 학습 항목 추가
-                </button>
-            </div>
-        </header>
-
-        <div class="notice-banner" id="sample-banner" hidden>
-            <i class="fa-solid fa-triangle-exclamation"></i>
             <div>
-                <strong>지금 보이는 내용은 실제 코칭 기록이 아닌 예시 데이터입니다.</strong>
-                <span>대시보드 동작 확인용으로 채워둔 표본이며, 실제 몰리·빌 대화에서 추출한 자료가 아닙니다. 실제 자료를 적재하면 자동으로 사라집니다.</span>
+                <h1>Stepping Stones</h1>
+                <p>Your English, one small stone at a time.</p>
             </div>
         </div>
-
-        <section class="stones-panel glass-card">
-            <div class="stones-head">
-                <div>
-                    <span class="panel-label">현재 단계</span>
-                    <h2 id="stone-name">—</h2>
-                    <p id="stone-caption" class="panel-caption">—</p>
-                </div>
-                <div class="stone-metric">
-                    <span class="hero-number" id="stone-mastered">0</span>
-                    <span class="hero-unit">누적 마스터 항목</span>
-                </div>
-            </div>
-            <ol class="stone-track" id="stone-track"></ol>
-        </section>
-
-        <section class="stats-grid">
-            <div class="stat-card glass-card">
-                <div class="stat-icon icon-total"><i class="fa-solid fa-layer-group"></i></div>
-                <div class="stat-info">
-                    <span class="stat-label">기간 내 학습 항목</span>
-                    <h3 id="stat-items">0</h3>
-                </div>
-            </div>
-            <div class="stat-card glass-card">
-                <div class="stat-icon icon-sessions"><i class="fa-solid fa-comments"></i></div>
-                <div class="stat-info">
-                    <span class="stat-label">코칭 세션</span>
-                    <h3 id="stat-sessions">0</h3>
-                </div>
-            </div>
-            <div class="stat-card glass-card">
-                <div class="stat-icon icon-time"><i class="fa-regular fa-clock"></i></div>
-                <div class="stat-info">
-                    <span class="stat-label">학습 시간</span>
-                    <h3 id="stat-minutes">0분</h3>
-                </div>
-            </div>
-            <div class="stat-card glass-card">
-                <div class="stat-icon icon-mastery"><i class="fa-solid fa-award"></i></div>
-                <div class="stat-info">
-                    <span class="stat-label">기간 내 마스터율</span>
-                    <h3 id="stat-rate">0%</h3>
-                </div>
-            </div>
-        </section>
-
-        <section class="chart-grid">
-            <figure class="chart-card glass-card">
-                <figcaption>
-                    <h3>주차별 학습 항목</h3>
-                    <p>최근 4주 동안 새로 정리한 표현 수</p>
-                </figcaption>
-                <div class="chart-body" id="chart-weekly"></div>
-            </figure>
-
-            <figure class="chart-card glass-card">
-                <figcaption>
-                    <h3>유형별 분포</h3>
-                    <p>무엇을 주로 공부했는지</p>
-                </figcaption>
-                <div class="chart-body" id="chart-type"></div>
-            </figure>
-
-            <figure class="chart-card glass-card span-2">
-                <figcaption>
-                    <h3>숙련도 구성</h3>
-                    <p>기간 내 항목의 학습 상태</p>
-                </figcaption>
-                <div class="chart-body" id="chart-status"></div>
-                <div class="coach-split" id="coach-split"></div>
-            </figure>
-        </section>
-
-        <section class="toolbar glass-card">
-            <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="search-input" placeholder="표현, 뜻, 예문, 태그로 검색...">
-                <button class="clear-search-btn" id="clear-search-btn" hidden>
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="filter-controls">
-                <div class="status-tabs" id="status-tabs">
-                    <button class="tab-btn active" data-status="">전체</button>
-                    <button class="tab-btn" data-status="new">새 항목</button>
-                    <button class="tab-btn" data-status="learning">학습 중</button>
-                    <button class="tab-btn" data-status="mastered">마스터</button>
-                </div>
-                <div class="select-group">
-                    <div class="custom-select-wrapper">
-                        <i class="fa-solid fa-shapes select-icon"></i>
-                        <select id="type-filter">
-                            <option value="">모든 유형</option>
-                            <option value="vocab">단어 · 구동사</option>
-                            <option value="expression">표현</option>
-                            <option value="grammar">문법</option>
-                            <option value="pronunciation">발음</option>
-                        </select>
-                    </div>
-                    <div class="custom-select-wrapper">
-                        <i class="fa-solid fa-user select-icon"></i>
-                        <select id="coach-filter">
-                            <option value="">모든 코치</option>
-                            <option value="Molly">Molly</option>
-                            <option value="Bill">Bill</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <main class="study-section">
-            <div id="item-list" class="item-list"></div>
-            <div id="empty-state" class="empty-state glass-card" hidden>
-                <div class="empty-icon"><i class="fa-regular fa-folder-open"></i></div>
-                <h3>표시할 학습 자료가 없습니다</h3>
-                <p>기간을 넓히거나 필터를 해제해 보세요.</p>
-            </div>
-        </main>
-
-        <footer class="app-footer">
-            <span>Stepping Stones 단계 기준은 <code>database.py</code>의 <code>STONES</code>에서 조정합니다.</span>
-        </footer>
-    </div>
-
-    <div class="modal-overlay" id="item-modal">
-        <div class="modal-content glass-card">
-            <div class="modal-header">
-                <h2><i class="fa-solid fa-pen-to-square"></i> 학습 항목 추가</h2>
-                <button class="close-modal" id="close-modal"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="item-form">
-                <div class="form-group">
-                    <label for="f-term">표현 <span class="required">*</span></label>
-                    <input type="text" id="f-term" required maxlength="120" placeholder="예: circle back">
-                </div>
-                <div class="form-group">
-                    <label for="f-meaning">뜻</label>
-                    <input type="text" id="f-meaning" maxlength="200" placeholder="다시 논의하다">
-                </div>
-                <div class="form-group">
-                    <label for="f-example">예문</label>
-                    <textarea id="f-example" rows="2" placeholder="I will circle back on this tomorrow."></textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="f-type">유형</label>
-                        <select id="f-type">
-                            <option value="vocab">단어 · 구동사</option>
-                            <option value="expression">표현</option>
-                            <option value="grammar">문법</option>
-                            <option value="pronunciation">발음</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="f-coach">코치</label>
-                        <select id="f-coach">
-                            <option value="Molly">Molly</option>
-                            <option value="Bill">Bill</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="f-tags">태그</label>
-                        <input type="text" id="f-tags" placeholder="business, phrasal">
-                    </div>
-                    <div class="form-group">
-                        <label for="f-date">학습일</label>
-                        <input type="date" id="f-date">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="cancel-modal">취소</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 저장</button>
-                </div>
-            </form>
+        <div class="range" role="group" aria-label="Time range">
+            <button class="chip" data-days="30">Last 30 days</button>
+            <button class="chip" data-days="90">Last 90 days</button>
+            <button class="chip" data-days="365">Last year</button>
+            <button class="chip active" data-days="">All time</button>
         </div>
+    </header>
+
+    <p class="source-note" id="source-note">Loading your data…</p>
+
+    <!-- Pebble tower + headline numbers -->
+    <section class="hero card">
+        <div class="tower-wrap">
+            <div class="tower" id="tower" aria-hidden="true"></div>
+            <div class="tower-caption">
+                <span class="big" id="hero-pebbles">0</span>
+                <span class="small">pebbles — one for each session</span>
+            </div>
+        </div>
+        <dl class="hero-stats">
+            <div><dt>Sessions</dt><dd id="hero-sessions">0</dd></div>
+            <div><dt>Words you wrote</dt><dd id="hero-words">0</dd></div>
+            <div><dt>Things to study</dt><dd id="hero-study">0</dd></div>
+            <div><dt>Already done</dt><dd id="hero-done">0</dd></div>
+        </dl>
+    </section>
+
+    <!-- 5 category modules -->
+    <h2 class="section-title">How you are doing <span>five parts of your English</span></h2>
+    <section class="cat-grid" id="cat-grid"></section>
+
+    <!-- Habits -->
+    <section class="two-col">
+        <figure class="card chart-card">
+            <figcaption>
+                <h3>Words you repeat</h3>
+                <p>Filler words in your own writing. Fewer is usually better.</p>
+            </figcaption>
+            <div id="chart-filler"></div>
+        </figure>
+        <figure class="card chart-card">
+            <figcaption>
+                <h3>Words that soften your point</h3>
+                <p>Hedging. Use them when you are unsure — not by habit.</p>
+            </figcaption>
+            <div id="chart-hedge"></div>
+        </figure>
+    </section>
+
+    <!-- Study list -->
+    <h2 class="section-title">What to study <span>built from your own sessions</span></h2>
+    <section class="card toolbar">
+        <div class="search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="search" placeholder="Search your study list…">
+        </div>
+        <div class="tabs" id="status-tabs">
+            <button class="chip active" data-status="">All</button>
+            <button class="chip" data-status="todo">To do</button>
+            <button class="chip" data-status="working">Working on it</button>
+            <button class="chip" data-status="done">Done</button>
+        </div>
+        <div class="tabs" id="cat-tabs">
+            <button class="chip active" data-category="">Every part</button>
+            <button class="chip" data-category="habit">Habit</button>
+            <button class="chip" data-category="discourse">Voice</button>
+            <button class="chip" data-category="accuracy">Accuracy</button>
+            <button class="chip" data-category="nuance">Words</button>
+        </div>
+    </section>
+
+    <div id="study-list" class="study-list"></div>
+    <div id="study-empty" class="card empty" hidden>
+        <i class="fa-regular fa-face-smile"></i>
+        <h3>Nothing here</h3>
+        <p>Try another filter.</p>
     </div>
 
-    <div id="toast-container" class="toast-container"></div>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Recent sessions -->
+    <h2 class="section-title">Recent sessions <span>your latest practice</span></h2>
+    <section class="card">
+        <table class="sessions">
+            <thead>
+                <tr><th>Date</th><th>What it was about</th><th>Kind</th><th class="num">Words</th></tr>
+            </thead>
+            <tbody id="recent-body"></tbody>
+        </table>
+    </section>
+
+    <footer class="foot">
+        <p>Numbers come from your own writing only. Your coach's replies are not counted.</p>
+    </footer>
+</div>
+
+<div id="toasts" class="toasts"></div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
