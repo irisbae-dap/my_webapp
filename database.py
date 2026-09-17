@@ -2,7 +2,12 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'todo.db')
+# Vercel 등 서버리스 환경은 프로젝트 디렉터리가 읽기 전용이므로 /tmp 를 사용한다.
+# 주의: /tmp 는 인스턴스마다 분리되고 휘발되므로 데이터가 영구 보존되지 않는다.
+if os.environ.get('VERCEL'):
+    DB_FILE = os.path.join('/tmp', 'todo.db')
+else:
+    DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'todo.db')
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
