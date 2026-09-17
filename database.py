@@ -10,6 +10,10 @@ USE_POSTGRES = bool(DATABASE_URL)
 if USE_POSTGRES:
     import psycopg2
     from psycopg2.extras import RealDictCursor
+elif os.environ.get('VERCEL'):
+    # 서버리스는 프로젝트 디렉터리가 읽기 전용이라 /tmp 를 쓴다.
+    # 인스턴스마다 분리·휘발되므로 DATABASE_URL 설정 전까지의 임시 동작이다.
+    SQLITE_FILE = os.path.join('/tmp', 'todo.db')
 else:
     SQLITE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'todo.db')
 
